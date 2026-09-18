@@ -124,7 +124,74 @@ NAME_MAP = {
     "Conor Tomlinson": "conor tomlinson",   # quota file uses lowercase
 }
 
-DEFAULT_TARGETS = Path(__file__).parent / "2026 SMB quotas in local currency 9.17.26.xlsx"
+# ─────────────────────────────────────────────────────────────────────────────
+# EMBEDDED QUOTA DATA  (PR monthly amounts in local currency, FY 2026)
+# Source: 2026 SMB quotas in local currency 9.17.26.xlsx — GTM Ops Plan Summary Concur
+# PR columns are already pro-rated for mid-year starters (zeros before first quota month)
+# ─────────────────────────────────────────────────────────────────────────────
+QUOTA_DATA = [
+    {'name': 'Andrew Cooksley', 'market': 'Australia', 'team': 'Australia SMB Client Sales', 'currency': 'AUD', 'pr': [20228.02, 24273.93, 36410.52, 23924.77, 28709.65, 43064.29, 25044.06, 30053.09, 45079.45, 25786.44, 30943.66, 46415.3]},
+    {'name': 'Kate Hulmston', 'market': 'Australia', 'team': 'Australia SMB Client Sales', 'currency': 'AUD', 'pr': [32994.11, 39593.43, 59389.52, 39023.91, 46828.57, 70242.54, 40849.58, 49019.87, 73529.49, 42060.5, 50472.48, 75708.41]},
+    {'name': 'Amanda Player', 'market': 'Australia', 'team': 'Australia SMB Client Sales', 'currency': 'AUD', 'pr': [32994.11, 39593.43, 59389.52, 39023.91, 46828.57, 70242.54, 40849.58, 49019.87, 73529.49, 42060.5, 50472.48, 75708.41]},
+    {'name': 'Steve Kavanagh', 'market': 'Australia', 'team': 'Australia SMB Client Sales', 'currency': 'AUD', 'pr': [20228.02, 24273.93, 36410.52, 23924.77, 28709.65, 43064.29, 25044.06, 30053.09, 45079.45, 25786.44, 30943.66, 46415.3]},
+    {'name': 'Claire van der Vegt', 'market': 'Australia', 'team': 'Australia SMB Client Sales', 'currency': 'AUD', 'pr': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 30052.84, 45079.07, 25786.23, 30943.4, 46414.91]},
+    {'name': 'Hung Do', 'market': 'Australia', 'team': 'Australia SMB Client Sales', 'currency': 'AUD', 'pr': [20228.02, 24273.93, 36410.52, 23924.77, 28709.65, 43064.29, 25044.06, 30053.09, 45079.45, 25786.44, 30943.66, 46415.3]},
+    {'name': 'Peter Axon', 'market': 'Australia', 'team': 'Australia Mid Market', 'currency': 'AUD', 'pr': [8283.94, 9940.85, 14911.12, 9797.86, 11757.4, 17636.02, 10256.24, 12307.58, 18461.29, 10560.27, 12672.29, 19008.36]},
+    {'name': 'Darcy Penman', 'market': 'Australia', 'team': 'Australia Mid Market', 'currency': 'AUD', 'pr': [8283.94, 9940.85, 14911.12, 9797.86, 11757.4, 17636.02, 10256.24, 12307.58, 18461.29, 10560.27, 12672.29, 19008.36]},
+    {'name': 'Manan Taneja', 'market': 'Australia', 'team': 'Australia Mid Market', 'currency': 'AUD', 'pr': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 10256.24, 12307.57, 18461.29, 10560.27, 12672.29, 19008.36]},
+    {'name': 'Nick Bright', 'market': 'United Kingdom', 'team': 'UK Ireland', 'currency': 'GBP', 'pr': [10868.31, 13041.96, 19562.96, 12350.35, 14820.42, 22230.63, 12844.37, 15413.24, 23119.86, 13338.38, 16006.06, 24009.08]},
+    {'name': 'Danny Gloyne', 'market': 'United Kingdom', 'team': 'UK Ireland', 'currency': 'GBP', 'pr': [10868.31, 13041.97, 19562.96, 12350.34, 14820.42, 22230.63, 12844.37, 15413.24, 23119.86, 13338.38, 16006.06, 24009.08]},
+    {'name': 'Olivia Allen', 'market': 'United Kingdom', 'team': 'UK Ireland', 'currency': 'GBP', 'pr': [10868.31, 13041.97, 19562.96, 12350.35, 14820.42, 22230.63, 12844.37, 15413.24, 23119.85, 13338.38, 16006.06, 24009.08]},
+    {'name': 'Bryn Cowling', 'market': 'United Kingdom', 'team': 'UK Mid Market', 'currency': 'GBP', 'pr': [8396.73, 10076.17, 15114.18, 9689.92, 11627.9, 17441.86, 10299.46, 12359.35, 18539.03, 10787.09, 12944.6, 19417.14]},
+    {'name': 'Hannah White', 'market': 'United Kingdom', 'team': 'UK Mid Market', 'currency': 'GBP', 'pr': [8396.73, 10076.17, 15114.18, 9689.92, 11627.91, 17441.86, 10299.46, 12359.35, 18539.03, 10787.09, 12944.59, 19417.14]},
+    {'name': 'Loreena Maguet', 'market': 'United Kingdom', 'team': 'UK Mid Market', 'currency': 'EUR', 'pr': [8396.73, 10076.17, 15114.18, 9689.92, 11627.91, 17441.85, 10299.46, 12359.35, 18539.03, 10787.09, 12944.6, 19417.14]},
+    {'name': 'Calvin Nisban', 'market': 'United Kingdom', 'team': 'UK Mid Market', 'currency': 'GBP', 'pr': [8396.73, 10076.17, 15114.18, 9689.92, 11627.91, 17441.85, 10299.46, 12359.35, 18539.03, 10787.09, 12944.6, 19417.14]},
+    {'name': 'Lily Shaw', 'market': 'United Kingdom', 'team': 'UK Mid Market', 'currency': 'GBP', 'pr': [8396.73, 10076.17, 15114.18, 9689.92, 11627.91, 17441.86, 10299.46, 12359.35, 18539.03, 10787.08, 12944.6, 19417.14]},
+    {'name': 'Tom Evans', 'market': 'United Kingdom', 'team': 'UK Mid Market', 'currency': 'GBP', 'pr': [8396.73, 10076.16, 15114.18, 9689.92, 11627.91, 17441.86, 10299.46, 12359.35, 18539.03, 10787.09, 12944.6, 19417.14]},
+    {'name': 'Lydia Morrell', 'market': 'United Kingdom', 'team': 'UK Mid Market', 'currency': 'GBP', 'pr': [8396.73, 10076.17, 15114.18, 9689.92, 11627.91, 17441.86, 10299.45, 12359.35, 18539.03, 10787.09, 12944.6, 19417.14]},
+    {'name': 'Jake Jenkins', 'market': 'United Kingdom', 'team': 'UK Mid Market', 'currency': 'GBP', 'pr': [8396.73, 10076.17, 15114.18, 9689.92, 11627.9, 17441.86, 10299.46, 12359.35, 18539.03, 10787.09, 12944.6, 19417.14]},
+    {'name': 'James Hirst', 'market': 'United Kingdom', 'team': 'UK Mid Market', 'currency': 'GBP', 'pr': [0.0, 10076.17, 15114.18, 9689.91, 11627.91, 17441.86, 10299.46, 12359.35, 18539.03, 10787.09, 12944.6, 19417.14]},
+    {'name': 'Ben Chandiram', 'market': 'United Kingdom', 'team': 'UK Premier', 'currency': 'GBP', 'pr': [15924.92, 19110.08, 28664.98, 18377.54, 22053.05, 33079.57, 19533.56, 23440.28, 35160.41, 20458.39, 24550.24, 36825.81]},
+    {'name': 'Jack Morris', 'market': 'United Kingdom', 'team': 'UK Premier', 'currency': 'GBP', 'pr': [15924.92, 19110.08, 28664.98, 18377.53, 22053.05, 33079.57, 19533.56, 23440.28, 35160.42, 20458.39, 24550.24, 36825.81]},
+    {'name': 'Sachin Wilde', 'market': 'United Kingdom', 'team': 'UK Premier', 'currency': 'GBP', 'pr': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 19533.55, 23440.28, 35160.42, 20458.39, 24550.24, 36825.81]},
+    {'name': 'Alastair King', 'market': 'United Kingdom', 'team': 'UK National', 'currency': 'GBP', 'pr': [13917.58, 16701.26, 25051.76, 16061.05, 19273.26, 28909.89, 17071.36, 20485.63, 30728.45, 17879.61, 21455.68, 32183.91]},
+    {'name': "Glen O'Brien", 'market': 'United Kingdom', 'team': 'UK National', 'currency': 'GBP', 'pr': [13917.59, 16701.26, 25051.76, 16061.04, 19273.26, 28909.89, 17071.36, 20485.63, 30728.45, 17879.61, 21455.68, 32183.91]},
+    {'name': 'James Hooker', 'market': 'United Kingdom', 'team': 'UK National', 'currency': 'GBP', 'pr': [13917.59, 16701.26, 25051.75, 16061.05, 19273.26, 28909.89, 17071.36, 20485.63, 30728.45, 17879.61, 21455.68, 32183.91]},
+    {'name': 'richard vines', 'market': 'United Kingdom', 'team': 'UK National', 'currency': 'GBP', 'pr': [13917.58, 16701.26, 25051.76, 16061.05, 19273.26, 28909.89, 17071.36, 20485.63, 30728.45, 17879.61, 21455.68, 32183.91]},
+    {'name': 'Alan Donohoe', 'market': 'United Kingdom', 'team': 'UK SMB Client Sales Premier', 'currency': 'EUR', 'pr': [39825.82, 47791.43, 71686.77, 45959.44, 55151.33, 82727.0, 48850.49, 58620.59, 87930.88, 51163.32, 61396.44, 92095.77]},
+    {'name': 'Lydia Holloway', 'market': 'United Kingdom', 'team': 'UK SMB Client Sales Premier', 'currency': 'AED', 'pr': [39825.82, 47791.43, 71686.77, 45959.44, 55151.33, 82727.0, 48850.49, 58620.59, 87930.88, 51163.32, 61396.44, 92095.77]},
+    {'name': 'Kammie Flitton', 'market': 'United Kingdom', 'team': 'UK SMB Client Sales Premier', 'currency': 'GBP', 'pr': [39825.82, 47791.43, 71686.77, 45959.44, 55151.33, 82727.0, 48850.49, 58620.59, 87930.88, 51163.32, 61396.44, 92095.77]},
+    {'name': 'Karl Perkins', 'market': 'United Kingdom', 'team': 'UK SMB Client Sales Strategic', 'currency': 'GBP', 'pr': [29749.97, 35700.29, 53550.16, 34331.79, 41198.15, 61797.23, 36491.41, 43789.69, 65684.54, 38219.1, 45863.26, 68795.72]},
+    {'name': 'Izabella Krawczyk Patel', 'market': 'United Kingdom', 'team': 'UK SMB Client Sales Strategic', 'currency': 'GBP', 'pr': [29749.96, 35700.3, 53550.16, 34331.79, 41198.15, 61797.23, 36491.41, 43789.69, 65684.54, 38219.1, 45863.26, 68795.72]},
+    {'name': 'Joanna Blackmore', 'market': 'United Kingdom', 'team': 'UK SMB Client Sales Strategic', 'currency': 'GBP', 'pr': [29749.96, 35700.29, 53550.16, 34331.79, 41198.15, 61797.23, 36491.41, 43789.69, 65684.54, 38219.1, 45863.26, 68795.73]},
+    {'name': 'Michael Benn', 'market': 'United Kingdom', 'team': 'UK SMB Client Sales Strategic', 'currency': 'GBP', 'pr': [29749.96, 35700.29, 53550.16, 34331.79, 41198.15, 61797.23, 36491.41, 43789.69, 65684.54, 38219.1, 45863.27, 68795.72]},
+    {'name': 'Ryan Hale', 'market': 'United Kingdom', 'team': 'UK SMB Client Sales Strategic', 'currency': 'GBP', 'pr': [29749.89, 35700.21, 53550.03, 34331.71, 41198.06, 61797.08, 36491.32, 43789.6, 65684.38, 38219.01, 45863.15, 68795.56]},
+    {'name': 'Charlie Mason', 'market': 'United Kingdom', 'team': 'UK SMB Client Sales Key', 'currency': 'GBP', 'pr': [22470.44, 26964.79, 40446.97, 25931.15, 31117.38, 46676.07, 27562.33, 33074.79, 49612.18, 28867.27, 34640.98, 51962.1]},
+    {'name': 'Adrian Sage', 'market': 'United Kingdom', 'team': 'UK SMB Client Sales Key', 'currency': 'GBP', 'pr': [22470.45, 26964.79, 40446.97, 25931.15, 31117.38, 46676.07, 27562.33, 33074.79, 49612.18, 28867.27, 34640.97, 51962.1]},
+    {'name': 'Zak Jones', 'market': 'United Kingdom', 'team': 'UK SMB Client Sales Key', 'currency': 'GBP', 'pr': [22470.45, 26964.79, 40446.96, 25931.15, 31117.37, 46676.07, 27562.33, 33074.79, 49612.19, 28867.27, 34640.98, 51962.1]},
+    {'name': 'Ross Greetham', 'market': 'United Kingdom', 'team': 'UK SMB Client Sales Key', 'currency': 'GBP', 'pr': [22470.45, 26964.79, 40446.97, 25931.15, 31117.38, 46676.07, 27562.32, 33074.79, 49612.18, 28867.27, 34640.98, 51962.1]},
+    {'name': 'Lucy Collins', 'market': 'United Kingdom', 'team': 'UK SMB Client Sales Key', 'currency': 'GBP', 'pr': [22470.45, 26964.79, 40446.96, 25931.15, 31117.38, 46676.07, 27562.33, 33074.78, 49612.19, 28867.27, 34640.98, 51962.1]},
+    {'name': 'George Smith', 'market': 'United Kingdom', 'team': 'UK SMB Client Sales Key', 'currency': 'GBP', 'pr': [22470.45, 26964.79, 40446.96, 25931.15, 31117.38, 46676.07, 27562.33, 33074.79, 49612.19, 28867.27, 34640.97, 51962.1]},
+    {'name': 'Abbie Lewis', 'market': 'United Kingdom', 'team': 'UK SMB Client Sales Key', 'currency': 'GBP', 'pr': [22470.44, 26964.78, 40446.97, 25931.15, 31117.38, 46676.07, 27562.33, 33074.79, 49612.19, 28867.27, 34640.98, 51962.1]},
+    {'name': 'Alexa Parritt', 'market': 'United Kingdom', 'team': 'UK SMB Client Sales Key', 'currency': 'GBP', 'pr': [22470.45, 26964.79, 40446.97, 25931.15, 31117.38, 46676.07, 27562.32, 33074.79, 49612.19, 28867.26, 34640.98, 51962.1]},
+    {'name': 'Brad Holder', 'market': 'Canada', 'team': 'Canada SMB Client Sales Premier', 'currency': 'CAD', 'pr': [29560.81, 35473.08, 53209.34, 34399.59, 41279.17, 61919.03, 36785.62, 44142.75, 66214.12, 38235.48, 45882.79, 68824.19]},
+    {'name': 'Chelsea Salonek', 'market': 'Canada', 'team': 'Canada SMB Client Sales Premier', 'currency': 'USD', 'pr': [29560.81, 35473.08, 53209.34, 34399.59, 41279.17, 61919.03, 36785.62, 44142.75, 66214.12, 38235.48, 45882.79, 68824.19]},
+    {'name': 'Carol Murray', 'market': 'Canada', 'team': 'Canada SMB Client Sales Strategic', 'currency': 'CAD', 'pr': [18893.18, 22671.89, 34007.67, 21985.79, 26382.73, 39574.28, 23510.77, 28212.93, 42319.39, 24437.42, 29325.05, 43987.57]},
+    {'name': 'Cristian Kawa', 'market': 'Canada', 'team': 'Canada SMB Client Sales Strategic', 'currency': 'CAD', 'pr': [18893.18, 22671.89, 34007.66, 21985.79, 26382.73, 39574.28, 23510.77, 28212.94, 42319.39, 24437.42, 29325.05, 43987.57]},
+    {'name': 'Hannah Peach', 'market': 'Canada', 'team': 'Canada SMB Client Sales Strategic', 'currency': 'CAD', 'pr': [18893.18, 22671.89, 34007.66, 21985.8, 26382.73, 39574.28, 23510.77, 28212.93, 42319.39, 24437.42, 29325.05, 43987.57]},
+    {'name': 'Tyler Witt', 'market': 'Canada', 'team': 'Canada SMB Client Sales Key', 'currency': 'CAD', 'pr': [11192.8, 13431.39, 20147.0, 13024.94, 15629.8, 23444.8, 13928.38, 16714.05, 25071.08, 14477.35, 17372.9, 26059.35]},
+    {'name': 'Deanna Burgess', 'market': 'Canada', 'team': 'Canada SMB Client Sales Key', 'currency': 'CAD', 'pr': [11192.8, 13431.4, 20147.0, 13024.94, 15629.8, 23444.8, 13928.38, 16714.05, 25071.08, 14477.35, 17372.9, 26059.34]},
+    {'name': 'Christina Monardo', 'market': 'Canada', 'team': 'Canada MM East', 'currency': 'CAD', 'pr': [10030.85, 12037.06, 18055.49, 11672.79, 14007.23, 21010.94, 12482.44, 14978.93, 22468.39, 12974.42, 15569.38, 23354.07]},
+    {'name': 'Lisanne Lemay', 'market': 'Canada', 'team': 'Canada MM East', 'currency': 'CAD', 'pr': [10030.85, 12037.06, 18055.49, 11672.79, 14007.23, 21010.94, 12482.44, 14978.93, 22468.39, 12974.42, 15569.38, 23354.07]},
+    {'name': 'Megan Lucas', 'market': 'Canada', 'team': 'Canada MM East', 'currency': 'CAD', 'pr': [10030.85, 12037.06, 18055.49, 11672.79, 14007.23, 21010.94, 12482.44, 14978.93, 22468.39, 12974.42, 15569.38, 23354.07]},
+    {'name': 'Sierra Nardella', 'market': 'Canada', 'team': 'Canada MM East', 'currency': 'CAD', 'pr': [10030.85, 12037.06, 18055.49, 11672.79, 14007.23, 21010.94, 12482.44, 14978.93, 22468.39, 12974.42, 15569.38, 23354.07]},
+    {'name': 'Tyler Mielnichuk', 'market': 'Canada', 'team': 'Canada National East', 'currency': 'CAD', 'pr': [20042.0, 24050.48, 36075.53, 23322.66, 27986.98, 41980.64, 24940.37, 29928.45, 44892.67, 25923.36, 31108.19, 46662.28]},
+    {'name': 'Margaret Hill', 'market': 'Canada', 'team': 'Canada MM West', 'currency': 'CAD', 'pr': [0.0, 0.0, 18055.49, 11672.79, 14007.23, 21010.94, 12482.44, 14978.93, 22468.39, 12974.42, 15569.38, 23354.07]},
+    {'name': 'conor tomlinson', 'market': 'Canada', 'team': 'Canada MM West', 'currency': 'CAD', 'pr': [10030.85, 12037.06, 18055.49, 11672.79, 14007.23, 21010.94, 12482.44, 14978.93, 22468.39, 12974.42, 15569.38, 23354.07]},
+    {'name': 'Lindsay Witt', 'market': 'Canada', 'team': 'Canada MM West', 'currency': 'CAD', 'pr': [10030.85, 12037.06, 18055.49, 11672.79, 14007.23, 21010.94, 12482.44, 14978.93, 22468.39, 12974.42, 15569.38, 23354.07]},
+    {'name': 'Steve Swift', 'market': 'Canada', 'team': 'Canada National West', 'currency': 'CAD', 'pr': [20042.0, 24050.48, 36075.53, 23322.66, 27986.97, 41980.64, 24940.37, 29928.45, 44892.67, 25923.36, 31108.2, 46662.28]},
+    {'name': 'John Hargreaves', 'market': 'Canada', 'team': 'Canada National West', 'currency': 'CAD', 'pr': [20042.0, 24050.48, 36075.53, 23322.66, 27986.97, 41980.64, 24940.37, 29928.45, 44892.67, 25923.36, 31108.19, 46662.29]},
+]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CSS
@@ -448,14 +515,17 @@ def sf_run_report_multi(sf, report_id, month_nums, year, full_year=False):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# QUOTA LOADING  (INT — reads from local-currency quota file)
+# QUOTA LOADING  (INT — uses embedded QUOTA_DATA constant, no file required)
 # ─────────────────────────────────────────────────────────────────────────────
-def load_quotas_int(tgt_bytes, month_nums):
-    """Read the INT local-currency quota file and return quota maps.
+def load_quotas_int(month_nums):
+    """Build quota maps from the embedded QUOTA_DATA constant.
+
+    PR values in QUOTA_DATA are indexed 0–11 (Jan=0 … Dec=11) and are already
+    pro-rated for mid-year starters (zeros before first quota month).
 
     Returns:
-        ldr_quota_map  : FLSM name  → period quota (sum of reps under FLSM)
-        rep_quota_map  : rep name   → period quota (PR monthly columns summed)
+        ldr_quota_map  : FLSM name  → period quota
+        rep_quota_map  : rep name   → period quota
         rep_leader_map : rep name   → FLSM name
         rep_market_map : rep name   → market string
         market_pl_map  : market     → total period quota
@@ -463,45 +533,27 @@ def load_quotas_int(tgt_bytes, month_nums):
     if isinstance(month_nums, int):
         month_nums = [month_nums]
 
-    buf = io.BytesIO(tgt_bytes)
-    df  = pd.read_excel(buf, sheet_name="GTM Ops Plan Summary Concur")
-
-    # Filter to INT markets and quota-carrying named reps
-    df = df[df["Concur Market"].isin(["Canada", "United Kingdom", "Australia"])].copy()
-    df = df[(df["Quota Carrier"] == "Yes") & df["Employee Name"].notna()].copy()
-
-    # PR monthly columns for selected months
-    month_cols = [f"PR Concur Cloud Bookings ARR 501 - {MONTH_ABBREV[m-1]}"
-                  for m in month_nums]
-
     rep_quota_map  = {}
     rep_leader_map = {}
     rep_market_map = {}
     ldr_quota_map  = {}
     market_pl_map  = {"Canada": 0.0, "United Kingdom": 0.0, "Australia": 0.0}
 
-    for _, row in df.iterrows():
-        raw_name = str(row["Employee Name"]).strip()
-        nm       = normalize(raw_name)
-        team     = str(row.get("Concur Team","")).strip()
-        market   = str(row.get("Concur Market","")).strip()
+    for row in QUOTA_DATA:
+        nm       = normalize(row["name"])
+        team     = row["team"]
+        market   = row["market"]
+        pr       = row["pr"]          # list of 12 monthly values
 
-        # Period quota: sum PR monthly amounts (already pro-rated for mid-year)
-        period_q = 0.0
-        for col in month_cols:
-            val = row.get(col)
-            if pd.notna(val):
-                try: period_q += float(val)
-                except: pass
+        # Sum only the selected months (month_nums are 1-based)
+        period_q = sum(pr[m - 1] for m in month_nums if 1 <= m <= 12)
 
         rep_quota_map[nm]  = period_q
         rep_market_map[nm] = market
 
-        # Leader from static TEAM_LEADER_MAP
         leader = TEAM_LEADER_MAP.get(team, "")
         rep_leader_map[nm] = leader
 
-        # Accumulate leader and market totals
         if leader:
             ldr_quota_map[leader] = ldr_quota_map.get(leader, 0.0) + period_q
         if market in market_pl_map:
@@ -847,7 +899,7 @@ def run_calc(cw_raw, ltc_raw, ret_raw, comp_raw,
 # ─────────────────────────────────────────────────────────────────────────────
 for k, v in [("sf", None), ("data", None), ("last_run", None),
               ("raw_cw", None), ("raw_ltc", None), ("raw_ret", None),
-              ("raw_comp", None), ("tgt_bytes", None)]:
+              ("raw_comp", None)]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -963,26 +1015,12 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # ── Quota file ────────────────────────────────────────────────────────────
-    st.markdown("**Quota File**")
-    tgt_upload = st.file_uploader("Upload quotas .xlsx", type=["xlsx"],
-                                   help="2026 SMB quotas in local currency … .xlsx")
-    if tgt_upload:
-        st.session_state.tgt_bytes = tgt_upload.read()
-    elif DEFAULT_TARGETS.exists() and st.session_state.tgt_bytes is None:
-        st.session_state.tgt_bytes = DEFAULT_TARGETS.read_bytes()
-        st.caption(f"Using: {DEFAULT_TARGETS.name}")
-
-    st.markdown("---")
-
     # ── Run Reports ───────────────────────────────────────────────────────────
     run_btn = st.button("Run Reports", type="primary",
                         use_container_width=True, disabled=not conn_ok)
     if run_btn:
         if not all([rpt_cw, rpt_ltc, rpt_ret, rpt_comp]):
             st.error("All 4 Report IDs are required.")
-        elif st.session_state.tgt_bytes is None:
-            st.error("Please upload the Quota file.")
         else:
             n_months = len(month_nums)
             with st.spinner(f"Running Salesforce reports… "
@@ -1015,8 +1053,7 @@ with st.sidebar:
 
             with st.spinner("Calculating metrics…"):
                 try:
-                    lq, rq, rlm, rmm, mpl = load_quotas_int(
-                        st.session_state.tgt_bytes, month_nums)
+                    lq, rq, rlm, rmm, mpl = load_quotas_int(month_nums)
                     result = run_calc(
                         st.session_state.raw_cw,  st.session_state.raw_ltc,
                         st.session_state.raw_ret, st.session_state.raw_comp,
