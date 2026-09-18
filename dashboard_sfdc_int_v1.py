@@ -295,6 +295,7 @@ def _sf_get_meta(sf, report_id):
             path=f"analytics/reports/{report_id}",
             method="GET",
             params={"includeDetails": "true"},
+            timeout=30,
         )
     return _meta_cache[report_id]
 
@@ -342,6 +343,7 @@ def _post_report_async(sf, report_id, body_dict, params=None):
             path=f"analytics/reports/{report_id}/instances/{inst_id}",
             method="GET",
             params=params or {},
+            timeout=30,
         )
         if poll.get("status") == "Success":
             return poll, inst_id
@@ -359,7 +361,7 @@ def _fetch_all_pages_async(sf, report_id, inst_id, first_result, base_params):
         try:
             r = sf.restful(
                 path=f"analytics/reports/{report_id}/instances/{inst_id}",
-                method="GET", params=pg_params)
+                method="GET", params=pg_params, timeout=30)
             new = r.get("factMap", {}).get("T!T", {}).get("rows", [])
             if not new: break
             rows.extend(new)
@@ -381,7 +383,7 @@ def _fetch_all_pages(sf, report_id, first_result, body_dict, base_params):
             else:
                 current = sf.restful(
                     path=f"analytics/reports/{report_id}",
-                    method="GET", params=pg_params)
+                    method="GET", params=pg_params, timeout=30)
             combined = current.get("factMap", {}).get("T!T", {}).get("rows", [])
             if not combined: break
             rows.extend(combined)
@@ -390,13 +392,24 @@ def _fetch_all_pages(sf, report_id, first_result, body_dict, base_params):
     return rows
 
 def sf_run_report(sf, report_id, start_date=None, end_date=None):
+    """Fetch a Salesforce Analytics report with a date range filter.
+
+    Strategy (each step is only tried if the previous one fails):
+      S1 — synchronous POST with simple CLOSE_DATE filter   (timeout=120s)
+      S2 — synchronous POST with full patched metadata       (timeout=120s)
+      S3 — async POST with full patched metadata + polling   (timeout=30s/poll)
+      G  — GET fallback, no date filter                      (timeout=60s)
+
+    Sync POST (S1/S2) is tried first because it returns in one HTTP round-trip
+    with no polling loop, making it far more reliable in environments where
+    long-lived connections drop silently.  Async is kept as a fallback for
+    reports that explicitly reject sync execution.
+    """
     import copy as _copy
     params = {"includeDetails": "true"}
     result = None
     debug  = []
-    _winning_body    = None
-    _winning_params  = params
-    _winning_inst_id = None
+    _winning_body = None
 
     if "sf_post_debug" not in st.session_state:
         st.session_state.sf_post_debug = {}
@@ -405,31 +418,26 @@ def sf_run_report(sf, report_id, start_date=None, end_date=None):
                   "LASTMODIFIEDDATE","CLOSE_MONTH","CLOSEMONTH"}
 
     if start_date and end_date:
-        _a1_bucket_err = False
+        # ── S1: sync POST, simple CLOSE_DATE standard-date-filter ─────────────
+        _s1_body = {"reportMetadata": {"standardDateFilter": {
+            "column": "CLOSE_DATE", "durationValue": "CUSTOM",
+            "startDate": start_date, "endDate": end_date}}}
         try:
-            _a1_body = {"reportMetadata": {"standardDateFilter": {
-                "column": "CLOSE_DATE", "durationValue": "CUSTOM",
-                "startDate": start_date, "endDate": end_date}}}
-            r1, _a1_inst_id = _post_report_async(sf, report_id, _a1_body, params)
+            r1 = _post_report(sf, report_id, _s1_body, params)
             n1 = len(r1.get("factMap", {}).get("T!T", {}).get("rows", []))
-            all1 = r1.get("allData", True)
-            result = r1
-            _winning_body    = _a1_body
-            _winning_inst_id = _a1_inst_id
-            debug.append(f"A1 OK → {n1} rows" + ("" if all1 else " [paginating…]"))
+            result        = r1
+            _winning_body = _s1_body
+            debug.append(f"S1 OK → {n1} rows")
         except Exception as e1:
-            if "BucketField" in str(e1):
-                _a1_bucket_err = True
-                debug.append("A1 ERR: BucketField — switching to A2")
-            else:
-                debug.append(f"A1 ERR: {e1}")
+            debug.append(f"S1 ERR: {e1}")
 
+        # ── S2: sync POST, full patched metadata ───────────────────────────────
         if result is None:
             try:
-                full_resp   = _sf_get_meta(sf, report_id)
-                saved_meta  = full_resp.get("reportMetadata", {})
-                std_info    = saved_meta.get("standardDateFilter") or {}
-                std_col     = std_info.get("column", "CLOSE_DATE")
+                full_resp    = _sf_get_meta(sf, report_id)
+                saved_meta   = full_resp.get("reportMetadata", {})
+                std_info     = saved_meta.get("standardDateFilter") or {}
+                std_col      = std_info.get("column", "CLOSE_DATE")
                 patched_meta = _copy.deepcopy(saved_meta)
                 patched_meta["standardDateFilter"] = {
                     "column": std_col, "durationValue": "CUSTOM",
@@ -441,30 +449,57 @@ def sf_run_report(sf, report_id, start_date=None, end_date=None):
                     {"column": std_col, "operator": "greaterOrEqual", "value": start_date},
                     {"column": std_col, "operator": "lessOrEqual",    "value": end_date},
                 ]
-                _a2_body = {"reportMetadata": patched_meta}
-                r2, _a2_inst_id = _post_report_async(sf, report_id, _a2_body, params)
+                _s2_body = {"reportMetadata": patched_meta}
+                r2 = _post_report(sf, report_id, _s2_body, params)
                 n2 = len(r2.get("factMap", {}).get("T!T", {}).get("rows", []))
-                result = r2
-                _winning_body    = _a2_body
-                _winning_inst_id = _a2_inst_id
-                debug.append(f"A2 OK → {n2} rows")
+                result        = r2
+                _winning_body = _s2_body
+                debug.append(f"S2 OK → {n2} rows")
             except Exception as e2:
-                debug.append(f"A2 ERR: {e2}")
+                debug.append(f"S2 ERR: {e2}")
 
+        # ── S3: async POST (polling), full patched metadata ───────────────────
+        if result is None:
+            try:
+                _s3_body = _s2_body if "_s2_body" in dir() else _s1_body
+                r3, _inst_id = _post_report_async(sf, report_id, _s3_body, params)
+                n3 = len(r3.get("factMap", {}).get("T!T", {}).get("rows", []))
+                result        = r3
+                _winning_body = _s3_body
+                debug.append(f"S3-async OK → {n3} rows")
+                # async pagination path
+                all_rows = _fetch_all_pages_async(sf, report_id, _inst_id,
+                                                  result, params)
+                st.session_state.sf_post_debug[report_id] = " | ".join(debug)
+                meta   = result.get("reportMetadata", {})
+                ext    = result.get("reportExtendedMetadata", {})
+                cols   = meta.get("detailColumns", [])
+                cinfo  = ext.get("detailColumnInfo", {})
+                labels = [cinfo.get(c, {}).get("label", c) for c in cols]
+                records = []
+                for row in all_rows:
+                    cells = row.get("dataCells", [])
+                    records.append({labels[i]: _cell_val(cells[i])
+                                    for i in range(min(len(labels), len(cells)))})
+                return pd.DataFrame(records), len(records)
+            except Exception as e3:
+                debug.append(f"S3-async ERR: {e3}")
+
+    # ── G: GET fallback (no date filter, returns current saved filter) ─────────
     if result is None:
-        result = sf.restful(path=f"analytics/reports/{report_id}",
-                            method="GET", params=params)
-        nG = len(result.get("factMap", {}).get("T!T", {}).get("rows", []))
-        _winning_body    = None
-        _winning_inst_id = None
-        debug.append(f"GET-fallback → {nG} rows")
+        try:
+            result = sf.restful(path=f"analytics/reports/{report_id}",
+                                method="GET", params=params, timeout=60)
+            nG = len(result.get("factMap", {}).get("T!T", {}).get("rows", []))
+            _winning_body = None
+            debug.append(f"GET fallback → {nG} rows")
+        except Exception as eG:
+            raise RuntimeError(
+                f"All fetch strategies failed for {report_id}: "
+                f"{'; '.join(debug)}; GET: {eG}"
+            )
 
-    if _winning_inst_id:
-        all_rows = _fetch_all_pages_async(sf, report_id, _winning_inst_id,
-                                          result, _winning_params)
-    else:
-        all_rows = _fetch_all_pages(sf, report_id, result,
-                                    _winning_body, _winning_params)
+    all_rows = _fetch_all_pages(sf, report_id, result, _winning_body, params)
 
     st.session_state.sf_post_debug[report_id] = " | ".join(debug)
 
@@ -483,35 +518,28 @@ def sf_run_report(sf, report_id, start_date=None, end_date=None):
 
 
 def sf_run_report_multi(sf, report_id, month_nums, year, full_year=False):
-    """Run a report across the selected period, concatenating monthly calls.
+    """Run a report for the full YTD period in a single API call.
 
-    full_year=True: single call spanning Jan 1 – Dec 31 of year (used for
-    Retention, whose date field is a text picklist not filterable by API).
+    Uses a single date range (Jan 1 → end of last month in month_nums) instead
+    of one call per month.  The calc engine filters rows by month, so fetching
+    the full period at once is both correct and far faster.
+
+    full_year=True: span Jan 1 – Dec 31 (used for Retention, whose date field
+    is a text picklist rather than a real date column).
     """
     if isinstance(month_nums, int):
         month_nums = [month_nums]
 
+    start = f"{year}-01-01"
     if full_year:
-        start = f"{year}-01-01"
-        end   = f"{year}-12-31"
-        df, n = sf_run_report(sf, report_id, start, end)
-        return df, n
+        end = f"{year}-12-31"
+    else:
+        last_m    = max(month_nums)
+        _, last_d = monthrange(year, last_m)
+        end       = f"{year}-{last_m:02d}-{last_d:02d}"
 
-    frames = []
-    for m in month_nums:
-        _, last_day = monthrange(year, m)
-        start = f"{year}-{m:02d}-01"
-        end   = f"{year}-{m:02d}-{last_day:02d}"
-        try:
-            df_m, _ = sf_run_report(sf, report_id, start, end)
-            frames.append(df_m)
-        except Exception as e:
-            st.warning(f"Report {report_id} month {m} error: {e}")
-
-    if not frames:
-        return pd.DataFrame(), 0
-    combined = pd.concat(frames, ignore_index=True)
-    return combined, len(combined)
+    df, n = sf_run_report(sf, report_id, start, end)
+    return df, n
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1023,33 +1051,36 @@ with st.sidebar:
             st.error("All 4 Report IDs are required.")
         else:
             n_months = len(month_nums)
-            with st.spinner(f"Running Salesforce reports… "
-                            f"({n_months} month{'s' if n_months>1 else ''})"):
-                try:
-                    sf   = st.session_state.sf
-                    _yr  = int(sel_year)
-                    cw_df,  n1 = sf_run_report_multi(sf, rpt_cw,   month_nums, _yr)
-                    ltc_df, n2 = sf_run_report_multi(sf, rpt_ltc,  month_nums, _yr)
-                    ret_df, n3 = sf_run_report_multi(sf, rpt_ret,  month_nums, _yr,
+            sf   = st.session_state.sf
+            _yr  = int(sel_year)
+            try:
+                with st.spinner("Fetching CW ARR report…"):
+                    cw_df,  n1 = sf_run_report_multi(sf, rpt_cw,  month_nums, _yr)
+                with st.spinner("Fetching LTC report…"):
+                    ltc_df, n2 = sf_run_report_multi(sf, rpt_ltc, month_nums, _yr)
+                with st.spinner("Fetching Retention report…"):
+                    ret_df, n3 = sf_run_report_multi(sf, rpt_ret, month_nums, _yr,
                                                      full_year=True)
-                    comp_df,n4 = sf_run_report_multi(sf, rpt_comp, month_nums, _yr)
-                    st.session_state.raw_cw   = cw_df
-                    st.session_state.raw_ltc  = ltc_df
-                    st.session_state.raw_ret  = ret_df
-                    st.session_state.raw_comp = comp_df
-                    st.caption(f"CW ARR: {n1} rows | LTC: {n2} rows | "
-                               f"Retention: {n3} rows | Referral: {n4} rows")
-                    for name, n in [("CW ARR",n1),("LTC",n2),
-                                    ("Retention",n3),("Referral",n4)]:
-                        if n == 0:
-                            st.warning(f"**{name} returned 0 rows.** "
-                                       f"Check the report date filter in Salesforce.")
-                        elif n >= 2000:
-                            st.warning(f"**{name} returned 2,000 rows** — API cap. "
-                                       f"Some records may be missing.")
-                except Exception as e:
-                    st.error(f"Report error: {e}")
-                    st.stop()
+                with st.spinner("Fetching Referral report…"):
+                    comp_df,n4 = sf_run_report_multi(sf, rpt_comp,month_nums, _yr)
+
+                st.session_state.raw_cw   = cw_df
+                st.session_state.raw_ltc  = ltc_df
+                st.session_state.raw_ret  = ret_df
+                st.session_state.raw_comp = comp_df
+                st.caption(f"CW ARR: {n1} rows | LTC: {n2} rows | "
+                           f"Retention: {n3} rows | Referral: {n4} rows")
+                for name, n in [("CW ARR",n1),("LTC",n2),
+                                ("Retention",n3),("Referral",n4)]:
+                    if n == 0:
+                        st.warning(f"**{name} returned 0 rows.** "
+                                   f"Check the report date filter in Salesforce.")
+                    elif n >= 2000:
+                        st.warning(f"**{name} returned 2,000 rows** — API cap. "
+                                   f"Some records may be missing.")
+            except Exception as e:
+                st.error(f"Report error: {e}")
+                st.stop()
 
             with st.spinner("Calculating metrics…"):
                 try:
