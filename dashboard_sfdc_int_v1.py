@@ -341,16 +341,33 @@ def _cell_val(cell):
     Handles plain values, currency compound dicts, and User lookup fields.
     For multi-currency orgs the API returns currency amounts as:
       {"value": {"amount": 27467.28, "currency": "GBP"}, "label": "£27,467"}
-    This function unwraps the inner amount so downstream pd.to_numeric works.
+
+    Currency normalisation:
+      If the compound dict's currency tag is already "USD" (the SFDC org's
+      "(converted)" field worked correctly), the amount is returned as-is.
+      If the tag is a non-USD currency (e.g. "AED"), SFDC could not convert
+      the deal to USD — it returned the local amount instead.  In that case
+      we apply FX_RATES to normalise to USD so that the calculation engine
+      always operates in a single currency.
     """
     if cell is None:
         return None
     val = cell.get("value")
     if isinstance(val, dict):
-        # Currency / compound field: {"amount": 27467.28, "currency": "GBP"}
+        # Currency / compound field: {"amount": X, "currency": "CCY"}
         for key in ("amount", "value", "number"):
             if key in val:
-                return val[key]
+                amount = val[key]
+                ccy = val.get("currency", "USD")
+                # Normalise to USD if SFDC returned a non-USD local amount.
+                if ccy and ccy != "USD":
+                    rate = FX_RATES.get(ccy)
+                    if rate is not None:
+                        try:
+                            amount = float(amount) * rate   # local → USD
+                        except (TypeError, ValueError):
+                            pass
+                return amount
         return cell.get("label")
     # Salesforce User / record IDs are 15- or 18-char alphanumeric strings with
     # well-known key prefixes (005 = User, 003 = Contact, 001 = Account, etc.)
@@ -1563,7 +1580,8 @@ with col_debug:
             for rid, msg in st.session_state.sf_post_debug.items():
                 st.caption(f"{rid}: {msg}")
 
-        # Currency warning detail
-        st.markdown("**Quota currency outliers (fix in SFDC):**")
-        for rep, (mkt, team, has_cur, should_cur) in CURRENCY_WARNING_REPS.items():
-            st.caption(f"• {rep} ({mkt} / {team}): quota is {has_cur}, expected {should_cur}")
+        # Currency note: non-standard local currencies are handled via
+        # REP_CURRENCY + FX_RATES.  Chelsea Salonek (USD), Loreena Maguet
+        # (EUR), Alan Donohoe (EUR), Lydia Holloway (AED) are all mapped.
+        st.caption("Non-standard rep currencies: Chelsea Salonek (USD), "
+                   "Loreena Maguet (EUR), Alan Donohoe (EUR), Lydia Holloway (AED)")
