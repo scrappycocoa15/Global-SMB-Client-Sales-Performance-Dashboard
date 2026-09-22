@@ -300,10 +300,32 @@ def _sf_get_meta(sf, report_id):
     return _meta_cache[report_id]
 
 def _cell_val(cell):
-    if cell is None: return None
-    v = cell.get("value")
-    if v is None: v = cell.get("label")
-    return v
+    """Extract a plain Python value from a Salesforce Analytics API data cell.
+
+    Handles plain values, currency compound dicts, and User lookup fields.
+    For multi-currency orgs the API returns currency amounts as:
+      {"value": {"amount": 27467.28, "currency": "GBP"}, "label": "£27,467"}
+    This function unwraps the inner amount so downstream pd.to_numeric works.
+    """
+    if cell is None:
+        return None
+    val = cell.get("value")
+    if isinstance(val, dict):
+        # Currency / compound field: {"amount": 27467.28, "currency": "GBP"}
+        for key in ("amount", "value", "number"):
+            if key in val:
+                return val[key]
+        return cell.get("label")
+    # Salesforce User / record IDs are 15- or 18-char alphanumeric strings with
+    # well-known key prefixes (005 = User, 003 = Contact, 001 = Account, etc.)
+    if isinstance(val, str) and len(val) in (15, 18) and val[:3] in (
+            "005", "003", "001", "006", "00T", "00U"):
+        label = cell.get("label")
+        if label:
+            return label
+    if val is None:
+        return cell.get("label")
+    return val
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SFDC REPORT EXECUTION  (identical to US version)
