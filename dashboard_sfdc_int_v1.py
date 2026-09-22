@@ -801,8 +801,10 @@ def run_calc(cw_raw, ltc_raw, ret_raw, comp_raw,
     complete_lookup = dict(zip(comp["Opportunity Name"].str.strip(),
                                comp["Complete_Credit_Val"]))
 
+    _fa_ltc = ("Forecast Amount (converted)" if "Forecast Amount (converted)" in ltc.columns
+               else "Forecast Amount")
     ltc["LTC_Uplift_Calc"] = ltc.apply(
-        lambda r: pd.to_numeric(r["Forecast Amount"], errors="coerce")
+        lambda r: pd.to_numeric(r[_fa_ltc], errors="coerce")
                   * ltc_rate(r["Term (no. of months)"]), axis=1)
     ltc_lookup = dict(zip(ltc["Opportunity Name"].str.strip(),
                           ltc["LTC_Uplift_Calc"]))
@@ -854,8 +856,10 @@ def run_calc(cw_raw, ltc_raw, ret_raw, comp_raw,
     master["Market"] = master["Team"].apply(market_from_team)
     master["Director"] = master["Leader"].apply(director_from_leader)
 
+    _fa_cw = ("Forecast Amount (converted)" if "Forecast Amount (converted)" in master.columns
+              else "Forecast Amount")
     master["Forecast_Amount_ARR"] = pd.to_numeric(
-        master["Forecast Amount"], errors="coerce").fillna(0)
+        master[_fa_cw], errors="coerce").fillna(0)
     master["_OppName"]       = master["Opportunity Name"].str.strip()
     master["In_Complete"]    = master["_OppName"].isin(complete_names).astype(int)
     master["Complete_Credit"]  = master["_OppName"].map(complete_lookup).fillna(0)
