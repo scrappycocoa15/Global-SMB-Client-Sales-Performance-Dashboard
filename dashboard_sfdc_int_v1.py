@@ -719,20 +719,31 @@ def run_calc(cw_raw, ltc_raw, ret_raw, comp_raw,
 
     # ── Filter by period ─────────────────────────────────────────────────────
     cw = cw_raw.copy()
-    cw["Close Date"] = pd.to_datetime(cw["Close Date"], errors="coerce")
-    cw = cw[(cw["Close Date"].dt.month.isin(month_nums)) &
-            (cw["Close Date"].dt.year  == year)].copy()
-    cw["Opportunity Owner"] = cw["Opportunity Owner"].apply(normalize)
+    # Guard: if CW report returns 0 rows (column-less DataFrame), ensure
+    # required columns exist so downstream master-dataset logic completes cleanly.
+    if "Close Date" in cw.columns:
+        cw["Close Date"] = pd.to_datetime(cw["Close Date"], errors="coerce")
+        cw = cw[(cw["Close Date"].dt.month.isin(month_nums)) &
+                (cw["Close Date"].dt.year  == year)].copy()
+    if "Opportunity Owner" in cw.columns:
+        cw["Opportunity Owner"] = cw["Opportunity Owner"].apply(normalize)
     mgr_col_cw = ("Oppty Manager" if "Oppty Manager" in cw.columns
                   else "Opportunity Owner: Manager")
     if mgr_col_cw in cw.columns:
         cw[mgr_col_cw] = cw[mgr_col_cw].apply(normalize)
+    for _col in ["Opportunity Owner", "Opportunity Name", "Close Date"]:
+        if _col not in cw.columns:
+            cw[_col] = pd.Series(dtype=object)
 
     ltc = ltc_raw.copy()
-    ltc["Close Date"] = pd.to_datetime(ltc["Close Date"], errors="coerce")
-    ltc = ltc[(ltc["Close Date"].dt.month.isin(month_nums)) &
-              (ltc["Close Date"].dt.year  == year)].copy()
-    ltc["Opportunity Owner"] = ltc["Opportunity Owner"].apply(normalize)
+    # Guard: LTC report may return 0 rows (e.g. SFDC date filter active), producing
+    # a column-less DataFrame.  Accessing ltc["Close Date"] on that would raise KeyError.
+    if "Close Date" in ltc.columns:
+        ltc["Close Date"] = pd.to_datetime(ltc["Close Date"], errors="coerce")
+        ltc = ltc[(ltc["Close Date"].dt.month.isin(month_nums)) &
+                  (ltc["Close Date"].dt.year  == year)].copy()
+    if "Opportunity Owner" in ltc.columns:
+        ltc["Opportunity Owner"] = ltc["Opportunity Owner"].apply(normalize)
     mgr_col_ltc = ("Oppty Manager" if "Oppty Manager" in ltc.columns
                    else "Opportunity Owner: Manager")
     if mgr_col_ltc in ltc.columns:
@@ -740,6 +751,15 @@ def run_calc(cw_raw, ltc_raw, ret_raw, comp_raw,
 
     # ── Retention — year-aware FMC filter ────────────────────────────────────
     ret = ret_raw.copy()
+    # Guard: if Retention report returns 0 rows (column-less DataFrame), pre-populate
+    # all columns the downstream logic touches so no KeyError is raised.
+    for _col in ["Final Month Closed", "Close Date", "Opportunity Owner",
+                 "Opportunity Name", "Opportunity ID", "BMI Sales ARR",
+                 "Roll-up Sales Credit Calculation (converted)",
+                 "Roll-up Sales Credit Calculation",
+                 "Oppty Team", "Opportunity Owner: Manager", "ARR Disputes"]:
+        if _col not in ret.columns:
+            ret[_col] = pd.Series(dtype=object)
     _fmc = ret["Final Month Closed"].fillna("").astype(str).str.strip()
     _month_year_explicit = [f"{mn} {year}"       for mn in month_names]
     _month_year_short    = [f"{mn[:3]} {year}"   for mn in month_names]
@@ -758,34 +778,51 @@ def run_calc(cw_raw, ltc_raw, ret_raw, comp_raw,
                    else "Opportunity Owner: Manager")
     if mgr_col_ret in ret.columns:
         ret[mgr_col_ret] = ret[mgr_col_ret].apply(normalize)
-    ret["BMI_ARR"]     = pd.to_numeric(ret["BMI Sales ARR"], errors="coerce").fillna(0)
-    # Roll-up Sales Credit — try converted column first, fall back to plain column
-    _sc_col = ("Roll-up Sales Credit Calculation (converted)"
-               if "Roll-up Sales Credit Calculation (converted)" in ret.columns
-               else "Roll-up Sales Credit Calculation"
-               if "Roll-up Sales Credit Calculation" in ret.columns
-               else None)
-    ret["Roll_SC_Ret"] = (pd.to_numeric(ret[_sc_col], errors="coerce").fillna(0)
-                          if _sc_col else 0.0)
+    ret["BMI_ARR"] = pd.to_numeric(ret["BMI Sales ARR"], errors="coerce").fillna(0)
+    # Retention incentive formula (per comp team): MAX(0, BMI Sales ARR − Forecast Amount).
+    # Resolve Forecast Amount: check the retention file first; if absent, join from cw_raw.
+    _fa_ret = next((c for c in ret.columns if c.lower().startswith("forecast amount")), None)
+    if _fa_ret:
+        _ret_fa_vals = pd.to_numeric(ret[_fa_ret], errors="coerce").fillna(0)
+    elif "Opportunity ID" in ret.columns and "Opportunity ID" in cw_raw.columns:
+        _fa_cw_col = next(
+            (c for c in cw_raw.columns if c.lower().startswith("forecast amount")), None)
+        if _fa_cw_col:
+            _fa_map = dict(zip(
+                cw_raw["Opportunity ID"],
+                pd.to_numeric(cw_raw[_fa_cw_col], errors="coerce")))
+            _ret_fa_vals = ret["Opportunity ID"].map(_fa_map).fillna(0)
+        else:
+            _ret_fa_vals = pd.Series(0.0, index=ret.index)
+    else:
+        _ret_fa_vals = pd.Series(0.0, index=ret.index)
+    ret["Roll_SC_Ret"] = _ret_fa_vals   # alias kept so groupby SC_SUM works unchanged
     # Exclude Split Opportunity rows
     _split = ret.get("ARR Disputes", pd.Series([""] * len(ret))).fillna("")
     ret = ret[~_split.str.contains("Split Opportunity", case=False, na=False)].copy()
 
     # ── Complete ──────────────────────────────────────────────────────────────
     comp = comp_raw.copy()
-    comp["_cm_parsed"] = pd.to_datetime(
-        comp["Close Month"].astype(str).str.strip(), errors="coerce", dayfirst=False)
-    comp = comp[(comp["_cm_parsed"].dt.year  == year) &
-                (comp["_cm_parsed"].dt.month.isin(month_nums))].copy()
-    comp.drop(columns=["_cm_parsed"], inplace=True)
-    comp["Opportunity Owner"] = comp["Opportunity Owner"].apply(normalize)
-    _sc_comp = ("Roll-up Sales Credit Calculation (converted)"
-                if "Roll-up Sales Credit Calculation (converted)" in comp.columns
-                else "Roll-up Sales Credit Calculation"
-                if "Roll-up Sales Credit Calculation" in comp.columns
-                else None)
-    comp["Complete_Credit_Val"] = (pd.to_numeric(comp[_sc_comp], errors="coerce").fillna(0)
-                                   if _sc_comp else 0.0)
+    # Guard: if Complete report returns 0 rows (column-less DataFrame), substitute
+    # an empty frame so the engine continues with Complete credit = $0 for the period.
+    if comp.empty or "Close Month" not in comp.columns:
+        comp = pd.DataFrame(columns=["Opportunity Owner", "Opportunity Name",
+                                      "Complete_Credit_Val"])
+        comp["Complete_Credit_Val"] = pd.Series(dtype=float)
+    else:
+        comp["_cm_parsed"] = pd.to_datetime(
+            comp["Close Month"].astype(str).str.strip(), errors="coerce", dayfirst=False)
+        comp = comp[(comp["_cm_parsed"].dt.year  == year) &
+                    (comp["_cm_parsed"].dt.month.isin(month_nums))].copy()
+        comp.drop(columns=["_cm_parsed"], inplace=True)
+        comp["Opportunity Owner"] = comp["Opportunity Owner"].apply(normalize)
+        _sc_comp = ("Roll-up Sales Credit Calculation (converted)"
+                    if "Roll-up Sales Credit Calculation (converted)" in comp.columns
+                    else "Roll-up Sales Credit Calculation"
+                    if "Roll-up Sales Credit Calculation" in comp.columns
+                    else None)
+        comp["Complete_Credit_Val"] = (pd.to_numeric(comp[_sc_comp], errors="coerce").fillna(0)
+                                       if _sc_comp else 0.0)
 
     # ── Lookup tables ─────────────────────────────────────────────────────────
     complete_names  = set(comp["Opportunity Name"].str.strip())
@@ -794,11 +831,16 @@ def run_calc(cw_raw, ltc_raw, ret_raw, comp_raw,
 
     _fa_ltc = ("Forecast Amount (converted)" if "Forecast Amount (converted)" in ltc.columns
                else "Forecast Amount")
-    ltc["LTC_Uplift_Calc"] = ltc.apply(
-        lambda r: pd.to_numeric(r[_fa_ltc], errors="coerce")
-                  * ltc_rate(r["Term (no. of months)"]), axis=1)
-    ltc_lookup = dict(zip(ltc["Opportunity Name"].str.strip(),
-                          ltc["LTC_Uplift_Calc"]))
+    if "Opportunity Name" in ltc.columns:
+        ltc["LTC_Uplift_Calc"] = ltc.apply(
+            lambda r: pd.to_numeric(r[_fa_ltc], errors="coerce")
+                      * ltc_rate(r["Term (no. of months)"]), axis=1)
+        ltc_lookup = dict(zip(ltc["Opportunity Name"].str.strip(),
+                              ltc["LTC_Uplift_Calc"]))
+    else:
+        # LTC returned no rows — no LTC credit this period.
+        ltc["LTC_Uplift_Calc"] = pd.Series(dtype=float)
+        ltc_lookup = {}
 
     # ── Retention grouping ───────────────────────────────────────────────────
     _team_col_ret = ("Oppty Team" if "Oppty Team" in ret.columns
@@ -854,8 +896,26 @@ def run_calc(cw_raw, ltc_raw, ret_raw, comp_raw,
     master["_OppName"]       = master["Opportunity Name"].str.strip()
     master["In_Complete"]    = master["_OppName"].isin(complete_names).astype(int)
     master["Complete_Credit"]  = master["_OppName"].map(complete_lookup).fillna(0)
-    master["CW_ARR_Adjusted"]  = np.where(
-        master["In_Complete"] == 1, 0, master["Forecast_Amount_ARR"])
+
+    # ── Endorsed App CW ARR override ─────────────────────────────────────────
+    # Endorsed App deals (partner contracts) have Forecast Amount = take-rate only.
+    # Roll-up Sales Credit Calculation = full partner contract ARR (credit base).
+    # Complete-exclusion still applies on top.
+    master["Endorsed_App_Flag"] = (
+        master["Opportunity Name"]
+        .str.contains("Endorsed App", case=False, na=False)
+        .astype(int)
+    )
+    _ru_sc_cw = next(
+        (c for c in master.columns if c.lower().startswith("roll-up sales credit")), None)
+    if _ru_sc_cw:
+        _rollup_sc = pd.to_numeric(master[_ru_sc_cw], errors="coerce").fillna(0)
+        _base_arr  = np.where(master["Endorsed_App_Flag"] == 1,
+                               _rollup_sc, master["Forecast_Amount_ARR"])
+    else:
+        _base_arr  = master["Forecast_Amount_ARR"]
+
+    master["CW_ARR_Adjusted"]  = np.where(master["In_Complete"] == 1, 0, _base_arr)
     master["LTC_Uplift"]       = master["_OppName"].map(ltc_lookup).fillna(0)
     master["Retention_Credit"] = master["_OppName"].map(ret_by_oppname).fillna(0)
     master["Total_Credited"]   = (master["CW_ARR_Adjusted"] + master["LTC_Uplift"]
