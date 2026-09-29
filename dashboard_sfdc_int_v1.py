@@ -1063,6 +1063,7 @@ for k, v in [("sf", None), ("data", None), ("last_run", None),
 
 period_label = "—"
 sel_market   = "All Markets"
+sel_rep      = "All Reps"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SIDEBAR
@@ -1251,10 +1252,17 @@ with st.sidebar:
         ldrs_avail = ["All Leaders"] + sorted(
             _rep_team["Leader"].dropna().unique().tolist())
         sel_ldr = st.selectbox("Leader", ldrs_avail)
+
+        _rep_ldr = (_rep_team[_rep_team["Leader"] == sel_ldr]
+                    if sel_ldr != "All Leaders" else _rep_team)
+        reps_avail = ["All Reps"] + sorted(
+            _rep_ldr["Rep"].dropna().unique().tolist())
+        sel_rep = st.selectbox("Rep", reps_avail)
     else:
         sel_market = "All Markets"
         sel_team   = "All Teams"
         sel_ldr    = "All Leaders"
+        sel_rep    = "All Reps"
 
     if st.session_state.last_run:
         st.caption(f"Last run: {st.session_state.last_run.strftime('%b %d %Y %H:%M')}")
@@ -1300,6 +1308,9 @@ if "sel_team" in dir() and sel_team != "All Teams":
 if "sel_ldr" in dir() and sel_ldr != "All Leaders":
     rep_df = rep_df[rep_df["Leader"] == sel_ldr].copy()
     ldr_df = ldr_df[ldr_df["Leader"] == sel_ldr].copy()
+
+if sel_rep != "All Reps":
+    rep_df = rep_df[rep_df["Rep"] == sel_rep].copy()
 
 # All KPI cards, charts, and rollups are in USD.
 # Per-rep local currency display is applied in the Rep Performance table below.
@@ -1545,7 +1556,63 @@ st.dataframe(styled, use_container_width=True, height=420, hide_index=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ROW 5 — MARKET DETAIL TABLE
+# ROW 5 — DEAL-LEVEL DETAIL
+# ─────────────────────────────────────────────────────────────────────────────
+st.markdown("<div class='sh'>Opportunity Breakdown</div>", unsafe_allow_html=True)
+_auto_expand = (sel_rep != "All Reps")
+
+deals_raw = d.get("master", pd.DataFrame()).copy()
+if not deals_raw.empty:
+    if sel_market != "All Markets":
+        deals_raw = deals_raw[deals_raw["Market"] == sel_market]
+    if "sel_team" in dir() and sel_team != "All Teams":
+        deals_raw = deals_raw[deals_raw["Team"] == sel_team]
+    if "sel_ldr" in dir() and sel_ldr != "All Leaders":
+        deals_raw = deals_raw[deals_raw["Leader"] == sel_ldr]
+    if _auto_expand:
+        deals_raw = deals_raw[deals_raw["Rep"] == sel_rep]
+    deals_raw = deals_raw[deals_raw["Total_Credited"] > 0].copy()
+
+with st.expander(
+    f"Deals for: {sel_rep}" if _auto_expand
+    else "Deal-Level Detail — select a Rep filter to focus",
+    expanded=_auto_expand,
+):
+    if deals_raw.empty:
+        st.info("No credited deals match the current filters.")
+    else:
+        _dt = deals_raw[["Rep", "Opportunity Name", "Close Date", "Market", "Team",
+                          "CW_ARR_Adjusted", "LTC_Uplift", "Retention_Credit",
+                          "Complete_Credit", "Total_Credited"]].copy()
+        _dt["Close Date"] = (pd.to_datetime(_dt["Close Date"], errors="coerce")
+                             .dt.strftime("%b %d, %Y").fillna("—"))
+        _dt = _dt.sort_values("Total_Credited", ascending=False)
+        _dt.rename(columns={
+            "CW_ARR_Adjusted":  "CW ARR",
+            "LTC_Uplift":       "LTC Uplift",
+            "Retention_Credit": "Retention",
+            "Complete_Credit":  "Complete/Ref",
+            "Total_Credited":   "Total Credited",
+        }, inplace=True)
+        # Format each monetary column in the rep's local currency (display only)
+        _mc = ["CW ARR", "LTC Uplift", "Retention", "Complete/Ref", "Total Credited"]
+        for _col in _mc:
+            _dt[_col] = _dt.apply(
+                lambda r, c=_col: fmt_local(r[c], REP_CURRENCY.get(r["Rep"], "USD")),
+                axis=1)
+        st.dataframe(_dt, use_container_width=True,
+                     height=min(450, 38 * len(_dt) + 42), hide_index=True)
+        # Summary totals in USD (cross-market aggregate)
+        _c1, _c2, _c3, _c4, _c5 = st.columns(5)
+        _c1.metric("CW ARR (USD)",    fmt_money(deals_raw["CW_ARR_Adjusted"].sum()))
+        _c2.metric("LTC (USD)",       fmt_money(deals_raw["LTC_Uplift"].sum()))
+        _c3.metric("Retention (USD)", fmt_money(deals_raw["Retention_Credit"].sum()))
+        _c4.metric("Complete (USD)",  fmt_money(deals_raw["Complete_Credit"].sum()))
+        _c5.metric("Total (USD)",     fmt_money(deals_raw["Total_Credited"].sum()))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ROW 6 — MARKET DETAIL TABLE
 # ─────────────────────────────────────────────────────────────────────────────
 st.markdown("<div class='sh'>Market Summary</div>", unsafe_allow_html=True)
 
