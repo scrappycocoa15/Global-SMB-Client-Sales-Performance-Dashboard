@@ -871,6 +871,8 @@ def run_calc(cw_raw, ltc_raw, ret_raw, comp_raw,
                     else None)
         comp["Complete_Credit_Val"] = (pd.to_numeric(comp[_sc_comp], errors="coerce").fillna(0)
                                        if _sc_comp else 0.0)
+        if "Opportunity ID" not in comp.columns:
+            comp["Opportunity ID"] = pd.Series(dtype=object)
 
     # ── Lookup tables ─────────────────────────────────────────────────────────
     complete_ids    = set(comp["Opportunity ID"].str.strip())
@@ -942,6 +944,8 @@ def run_calc(cw_raw, ltc_raw, ret_raw, comp_raw,
     master["Forecast_Amount_ARR"] = pd.to_numeric(
         master[_fa_cw], errors="coerce").fillna(0)
     master["_OppName"]       = master["Opportunity Name"].str.strip()
+    if "Opportunity ID" not in master.columns:
+        master["Opportunity ID"] = pd.Series(dtype=object)
     master["_OppID"]         = master["Opportunity ID"].astype(str).str.strip()
     master["In_Complete"]    = master["_OppID"].isin(complete_ids).astype(int)
     master["Complete_Credit"]  = master["_OppID"].map(complete_lookup).fillna(0)
