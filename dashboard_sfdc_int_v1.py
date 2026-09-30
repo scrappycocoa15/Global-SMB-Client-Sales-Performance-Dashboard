@@ -767,6 +767,7 @@ def run_calc(cw_raw, ltc_raw, ret_raw, comp_raw,
 
     # ── Filter by period ─────────────────────────────────────────────────────
     cw = cw_raw.copy()
+    cw.rename(columns={"ID (18 Char)": "Opportunity ID"}, inplace=True)
     # Guard: if CW report returns 0 rows (column-less DataFrame), ensure
     # required columns exist so downstream master-dataset logic completes cleanly.
     if "Close Date" in cw.columns:
@@ -784,6 +785,7 @@ def run_calc(cw_raw, ltc_raw, ret_raw, comp_raw,
             cw[_col] = pd.Series(dtype=object)
 
     ltc = ltc_raw.copy()
+    ltc.rename(columns={"ID (18 Char)": "Opportunity ID"}, inplace=True)
     # Guard: LTC report may return 0 rows (e.g. SFDC date filter active), producing
     # a column-less DataFrame.  Accessing ltc["Close Date"] on that would raise KeyError.
     if "Close Date" in ltc.columns:
@@ -799,6 +801,7 @@ def run_calc(cw_raw, ltc_raw, ret_raw, comp_raw,
 
     # ── Retention — year-aware FMC filter ────────────────────────────────────
     ret = ret_raw.copy()
+    ret.rename(columns={"ID (18 Char)": "Opportunity ID"}, inplace=True)
     # Guard: if Retention report returns 0 rows (column-less DataFrame), pre-populate
     # all columns the downstream logic touches so no KeyError is raised.
     for _col in ["Final Month Closed", "Close Date", "Opportunity Owner",
@@ -851,11 +854,12 @@ def run_calc(cw_raw, ltc_raw, ret_raw, comp_raw,
 
     # ── Complete ──────────────────────────────────────────────────────────────
     comp = comp_raw.copy()
+    comp.rename(columns={"ID (18 Char)": "Opportunity ID"}, inplace=True)
     # Guard: if Complete report returns 0 rows (column-less DataFrame), substitute
     # an empty frame so the engine continues with Complete credit = $0 for the period.
     if comp.empty or "Close Month" not in comp.columns:
         comp = pd.DataFrame(columns=["Opportunity Owner", "Opportunity Name",
-                                      "Opportunity ID", "Complete_Credit_Val"])
+                                      "Complete_Credit_Val"])
         comp["Complete_Credit_Val"] = pd.Series(dtype=float)
     else:
         comp["_cm_parsed"] = pd.to_datetime(
@@ -871,8 +875,6 @@ def run_calc(cw_raw, ltc_raw, ret_raw, comp_raw,
                     else None)
         comp["Complete_Credit_Val"] = (pd.to_numeric(comp[_sc_comp], errors="coerce").fillna(0)
                                        if _sc_comp else 0.0)
-        if "Opportunity ID" not in comp.columns:
-            comp["Opportunity ID"] = pd.Series(dtype=object)
 
     # ── Lookup tables ─────────────────────────────────────────────────────────
     complete_ids    = set(comp["Opportunity ID"].str.strip())
@@ -944,8 +946,6 @@ def run_calc(cw_raw, ltc_raw, ret_raw, comp_raw,
     master["Forecast_Amount_ARR"] = pd.to_numeric(
         master[_fa_cw], errors="coerce").fillna(0)
     master["_OppName"]       = master["Opportunity Name"].str.strip()
-    if "Opportunity ID" not in master.columns:
-        master["Opportunity ID"] = pd.Series(dtype=object)
     master["_OppID"]         = master["Opportunity ID"].astype(str).str.strip()
     master["In_Complete"]    = master["_OppID"].isin(complete_ids).astype(int)
     master["Complete_Credit"]  = master["_OppID"].map(complete_lookup).fillna(0)
@@ -969,7 +969,7 @@ def run_calc(cw_raw, ltc_raw, ret_raw, comp_raw,
         _base_arr  = master["Forecast_Amount_ARR"]
 
     master["CW_ARR_Adjusted"]  = np.where(master["In_Complete"] == 1, 0, _base_arr)
-    master["LTC_Uplift"]       = master["Opportunity ID"].str.strip().map(ltc_lookup).fillna(0)
+    master["LTC_Uplift"]       = master["_OppID"].map(ltc_lookup).fillna(0)
     master["Retention_Credit"] = master["_OppID"].map(ret_by_id).fillna(0)
     master["Total_Credited"]   = (master["CW_ARR_Adjusted"] + master["LTC_Uplift"]
                                    + master["Retention_Credit"]
