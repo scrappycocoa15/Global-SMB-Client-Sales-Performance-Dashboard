@@ -199,6 +199,47 @@ QUOTA_DATA = [
     {'name': 'Manan Taneja', 'market': 'Australia', 'team': 'Australia Mid Market', 'currency': 'AUD', 'pr': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 12102.36, 14522.93, 21784.32, 12461.11, 14953.3, 22429.86]},
 ]
 
+# ─────────────────────────────────────────────────────────────────────────────
+# DIVISION-LEVEL QUOTAS  (USD, FY 2026)
+# Source: 2026 SMB quotas in USD 9.17.26.xlsx — GTM Ops Plan Summary Concur
+#
+# Canada SMB Client Sales:
+#   SLSM row is an open/unnamed position with $0 PR monthly values.
+#   FY total ($2,985,893) is distributed proportionally using the rep-level
+#   PR monthly weights (same seasonal shape, scaled to the SLSM FY amount).
+#
+# UK SMB Client Sales:
+#   Adam Bazeley (SMB CSE SLSM) — PR monthly values used directly.
+#
+# Australia SMB Client Sales:
+#   Peter Soukos (SMB CSE FLSM, highest level in this division) — PR monthly
+#   values used directly. No SLSM row exists for this division.
+#
+# These are used for market-level KPI cards and the quota marker in the chart.
+# Individual rep quotas for rep-level attainment remain in QUOTA_DATA above.
+# ─────────────────────────────────────────────────────────────────────────────
+DIVISION_QUOTA_DATA: dict[str, list[float]] = {
+    "Canada SMB Client Sales": [
+        158771.88, 190526.86, 285788.84, 184761.11, 221711.53, 332568.80,
+        197576.53, 237091.87, 355637.83, 205363.78, 246437.72, 369656.60,
+    ],
+    "UK SMB Client Sales": [
+        528629.21,  634360.96,  951536.53,  610044.04,  732052.86, 1098079.29,
+        648418.42,  778102.11, 1167153.16,  679117.91,  814947.42, 1222435.93,
+    ],
+    "Australia SMB Client Sales": [
+        169943.49, 203934.73, 305898.92, 201001.32, 241200.95, 361799.83,
+        210404.85, 252487.75, 378730.02, 216641.95, 259969.71, 389952.97,
+    ],
+}
+
+# Maps each division to its market key used in MARKET_COLORS / market aggregation
+DIVISION_MARKET_MAP: dict[str, str] = {
+    "Canada SMB Client Sales":    "Canada",
+    "UK SMB Client Sales":        "United Kingdom",
+    "Australia SMB Client Sales": "Australia",
+}
+
 # Rep → local currency code (derived from QUOTA_DATA, used in the display layer)
 REP_CURRENCY: dict[str, str] = {
     row["name"]: row["currency"] for row in QUOTA_DATA
@@ -631,7 +672,15 @@ def load_quotas_int(month_nums):
     rep_leader_map = {}
     rep_market_map = {}
     ldr_quota_map  = {}
-    market_pl_map  = {"Canada": 0.0, "United Kingdom": 0.0, "Australia": 0.0}
+
+    # ── market_pl_map: read from DIVISION_QUOTA_DATA, not rep rollup ─────────
+    # Each division's monthly amounts are summed for the requested period only.
+    market_pl_map = {"Canada": 0.0, "United Kingdom": 0.0, "Australia": 0.0}
+    for div_name, monthly_amounts in DIVISION_QUOTA_DATA.items():
+        market = DIVISION_MARKET_MAP.get(div_name, "")
+        if market in market_pl_map:
+            market_pl_map[market] = sum(
+                monthly_amounts[m - 1] for m in month_nums if 1 <= m <= 12)
 
     for row in QUOTA_DATA:
         nm       = normalize(row["name"])
@@ -650,8 +699,7 @@ def load_quotas_int(month_nums):
 
         if leader:
             ldr_quota_map[leader] = ldr_quota_map.get(leader, 0.0) + period_q
-        if market in market_pl_map:
-            market_pl_map[market] += period_q
+        # market_pl_map no longer accumulates from reps — division quotas used above
 
     return ldr_quota_map, rep_quota_map, rep_leader_map, rep_market_map, market_pl_map
 
@@ -1319,7 +1367,13 @@ fmt_m = lambda v: fmt_money(v, "$")
 
 # Filtered totals
 f_total    = rep_df["Total_Credited"].sum()
-f_quota    = rep_df["Period_Quota"].sum()
+# Quota: use rep-level quota only when a specific rep is selected;
+# otherwise use the division-level quota from mkt_df (sourced from
+# DIVISION_QUOTA_DATA) so the KPI card reflects the correct market total.
+if sel_rep != "All Reps":
+    f_quota = rep_df["Period_Quota"].sum()
+else:
+    f_quota = mkt_df["PL_Quota"].sum() if len(mkt_df) > 0 else 0.0
 f_cw       = rep_df["CW_ARR"].sum()
 f_ltc      = rep_df["LTC_Credit"].sum()
 f_ret      = rep_df["Retention_Credit"].sum()
