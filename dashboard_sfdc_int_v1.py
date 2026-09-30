@@ -779,7 +779,7 @@ def run_calc(cw_raw, ltc_raw, ret_raw, comp_raw,
                   else "Opportunity Owner: Manager")
     if mgr_col_cw in cw.columns:
         cw[mgr_col_cw] = cw[mgr_col_cw].apply(normalize)
-    for _col in ["Opportunity Owner", "Opportunity Name", "Close Date"]:
+    for _col in ["Opportunity Owner", "Opportunity Name", "Opportunity ID", "Close Date"]:
         if _col not in cw.columns:
             cw[_col] = pd.Series(dtype=object)
 
@@ -855,7 +855,7 @@ def run_calc(cw_raw, ltc_raw, ret_raw, comp_raw,
     # an empty frame so the engine continues with Complete credit = $0 for the period.
     if comp.empty or "Close Month" not in comp.columns:
         comp = pd.DataFrame(columns=["Opportunity Owner", "Opportunity Name",
-                                      "Complete_Credit_Val"])
+                                      "Opportunity ID", "Complete_Credit_Val"])
         comp["Complete_Credit_Val"] = pd.Series(dtype=float)
     else:
         comp["_cm_parsed"] = pd.to_datetime(
@@ -873,17 +873,17 @@ def run_calc(cw_raw, ltc_raw, ret_raw, comp_raw,
                                        if _sc_comp else 0.0)
 
     # ── Lookup tables ─────────────────────────────────────────────────────────
-    complete_names  = set(comp["Opportunity Name"].str.strip())
-    complete_lookup = dict(zip(comp["Opportunity Name"].str.strip(),
+    complete_ids    = set(comp["Opportunity ID"].str.strip())
+    complete_lookup = dict(zip(comp["Opportunity ID"].str.strip(),
                                comp["Complete_Credit_Val"]))
 
     _fa_ltc = ("Forecast Amount (converted)" if "Forecast Amount (converted)" in ltc.columns
                else "Forecast Amount")
-    if "Opportunity Name" in ltc.columns:
+    if "Opportunity ID" in ltc.columns:
         ltc["LTC_Uplift_Calc"] = ltc.apply(
             lambda r: pd.to_numeric(r[_fa_ltc], errors="coerce")
                       * ltc_rate(r["Term (no. of months)"]), axis=1)
-        ltc_lookup = dict(zip(ltc["Opportunity Name"].str.strip(),
+        ltc_lookup = dict(zip(ltc["Opportunity ID"].str.strip(),
                               ltc["LTC_Uplift_Calc"]))
     else:
         # LTC returned no rows — no LTC credit this period.
@@ -918,7 +918,7 @@ def run_calc(cw_raw, ltc_raw, ret_raw, comp_raw,
     ret_grp["Leader"] = _assign_leader(_rg, TEAM_LEADER_MAP,
                                         mgr_col_ret, rep_leader_map).values
 
-    ret_by_oppname = ret_grp.groupby("OppName")["Retention_Credit"].sum().to_dict()
+    ret_by_id = ret_grp.groupby("Opportunity ID")["Retention_Credit"].sum().to_dict()
 
     # ── Master CW dataset ─────────────────────────────────────────────────────
     master = cw.copy()
@@ -942,8 +942,9 @@ def run_calc(cw_raw, ltc_raw, ret_raw, comp_raw,
     master["Forecast_Amount_ARR"] = pd.to_numeric(
         master[_fa_cw], errors="coerce").fillna(0)
     master["_OppName"]       = master["Opportunity Name"].str.strip()
-    master["In_Complete"]    = master["_OppName"].isin(complete_names).astype(int)
-    master["Complete_Credit"]  = master["_OppName"].map(complete_lookup).fillna(0)
+    master["_OppID"]         = master["Opportunity ID"].astype(str).str.strip()
+    master["In_Complete"]    = master["_OppID"].isin(complete_ids).astype(int)
+    master["Complete_Credit"]  = master["_OppID"].map(complete_lookup).fillna(0)
 
     # ── Endorsed App CW ARR override ─────────────────────────────────────────
     # Endorsed App deals (partner contracts) have Forecast Amount = take-rate only.
@@ -964,8 +965,8 @@ def run_calc(cw_raw, ltc_raw, ret_raw, comp_raw,
         _base_arr  = master["Forecast_Amount_ARR"]
 
     master["CW_ARR_Adjusted"]  = np.where(master["In_Complete"] == 1, 0, _base_arr)
-    master["LTC_Uplift"]       = master["_OppName"].map(ltc_lookup).fillna(0)
-    master["Retention_Credit"] = master["_OppName"].map(ret_by_oppname).fillna(0)
+    master["LTC_Uplift"]       = master["Opportunity ID"].str.strip().map(ltc_lookup).fillna(0)
+    master["Retention_Credit"] = master["_OppID"].map(ret_by_id).fillna(0)
     master["Total_Credited"]   = (master["CW_ARR_Adjusted"] + master["LTC_Uplift"]
                                    + master["Retention_Credit"]
                                    + master["Complete_Credit"])
