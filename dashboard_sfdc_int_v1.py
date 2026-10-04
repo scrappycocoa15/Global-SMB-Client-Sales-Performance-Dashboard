@@ -75,9 +75,9 @@ FX_RATES: dict[str, float] = {
 
 # Concur Team → FLSM (first-level sales manager / equivalent of RSD)
 TEAM_LEADER_MAP = {
-    "Canada SMB Client Sales Key":        "Lesley Nunes",
-    "Canada SMB Client Sales Premier":    "Lesley Nunes",
-    "Canada SMB Client Sales Strategic":  "Lesley Nunes",
+    "Canada SMB Client Sales Key":        "Brian Veloso",
+    "Canada SMB Client Sales Premier":    "Brian Veloso",
+    "Canada SMB Client Sales Strategic":  "Brian Veloso",
     "UK SMB Client Sales Key":            "Katie Brown",
     "UK SMB Client Sales Strategic":      "Bret Edis",
     "UK SMB Client Sales Premier":        "Bret Edis",
@@ -193,7 +193,7 @@ QUOTA_DATA = [
     {'name': 'Cristian Kawa', 'market': 'Canada', 'team': 'Canada SMB Client Sales Strategic', 'currency': 'CAD', 'pr': [22293.95, 26752.83, 40129.03, 25943.23, 31131.62, 46697.65, 27742.7, 33291.26, 49936.88, 28836.15, 34603.55, 51905.33]},
     {'name': 'Hannah Peach', 'market': 'Canada', 'team': 'Canada SMB Client Sales Strategic', 'currency': 'CAD', 'pr': [22293.95, 26752.83, 40129.03, 25943.24, 31131.62, 46697.65, 27742.7, 33291.25, 49936.88, 28836.15, 34603.55, 51905.33]},
     {'name': 'Tyler Witt', 'market': 'Canada', 'team': 'Canada SMB Client Sales Key', 'currency': 'CAD', 'pr': [13207.5, 15849.04, 23773.46, 15369.42, 18443.16, 27664.86, 16435.48, 19722.57, 29583.87, 17083.27, 20500.02, 30750.03]},
-    {'name': 'Deanna Burgess', 'market': 'Canada', 'team': 'Canada SMB Client Sales Key', 'currency': 'CAD', 'pr': [13207.5, 15849.05, 23773.46, 15369.42, 18443.16, 27664.86, 16435.48, 19722.57, 29583.87, 17083.27, 20500.02, 30750.02]},
+    {'name': 'Deanna Rota', 'market': 'Canada', 'team': 'Canada SMB Client Sales Key', 'currency': 'CAD', 'pr': [13207.5, 15849.05, 23773.46, 15369.42, 18443.16, 27664.86, 16435.48, 19722.57, 29583.87, 17083.27, 20500.02, 30750.02]},
 
     {'name': 'Hung Do', 'market': 'Australia', 'team': 'Australia SMB Client Sales', 'currency': 'AUD', 'pr': [23869.06, 28643.23, 42964.41, 28231.22, 33877.38, 50815.86, 29551.99, 35462.64, 53193.75, 30427.99, 36513.51, 54770.05]},
     {'name': 'Manan Taneja', 'market': 'Australia', 'team': 'Australia Mid Market', 'currency': 'AUD', 'pr': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 12102.36, 14522.93, 21784.32, 12461.11, 14953.3, 22429.86]},
@@ -739,8 +739,12 @@ def _assign_leader(df, team_leader_map, mgr_col, rep_leader_map):
             leader = leader.where(~mask, reg_ldr)
 
         # Layer 1: Oppty Team → team_leader_map (highest priority)
-        if "Oppty Team" in df.columns:
-            team_ldr = df["Oppty Team"].apply(
+        # Check multiple possible column names the SFDC report may use.
+        _team_col = next(
+            (c for c in ["Oppty Team", "Owner Team", "Concur Team"] if c in df.columns),
+            None)
+        if _team_col:
+            team_ldr = df[_team_col].apply(
                 lambda t: _clean(team_leader_map.get(str(t).strip(), "")))
             mask = team_ldr.ne("")
             leader = leader.where(~mask, team_ldr)
